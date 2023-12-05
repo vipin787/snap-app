@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Capture</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+    />
+    <style>
+      body {
+        margin: 20px;
+        background-color: #0a1a0e;
+        font-family: "Roboto", sans-serif;
+      }
+
+      #startBtn,
+      #stopBtn,
+      #imageContainer,
+      #imageCount {
+        margin-bottom: 10px;
+      }
+
+      #startBtn,
+      #stopBtn {
+        margin-right: 10px;
+      }
+
+      #imageContainer {
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      /* #imageWrappers {
+        width: 200%
+      } */
+
+      #imageContainer .imageWrapper {
+        position: relative;
+        margin-right: 10px;
+        /* width: 200% */
+      }
+
+      #imageContainer .imageWrapper > img {
+        width: 100%;
+        height: 80%;
+      }
+
+      .deleteButtonOverlay {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 10px;
+        height: 10px;
+        background-color: #000;
+        border-radius: 50%;
+        opacity: 0.5;
+        display: none;
+        z-index: 1;
+      }
+
+      .deleteButton {
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        cursor: pointer;
+        background-color: transparent;
+        border: none;
+        font-size: 16px;
+        color: red;
+        z-index: 2;
+      }
+
+      #downloadButton {
+        display: none;
+      }
+
+      #myModal {
+        display: flex;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        justify-content: center;
+        align-items: center;
+      }
+
+      .modal-content {
+        width: 30%;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+      }
+
+      #loader {
+        display: none;
+        background-color: #fff;
+        padding: 20px;
+      }
+      .buttonWrapper {
+        display: flex;
+        justify-content: space-evenly;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Modal -->
+    <div id="myModal" class="modal">
+      <div class="modal-content">
+        <p>Do you want to start streaming?</p>
+        <div>
+          <button
+            id="modalYesBtn"
+            class="btn btn-primary"
+            onclick="startStream()"
+          >
+            Yes
+          </button>
+          <button
+            id="modalNoBtn"
+            class="btn btn-secondary"
+            onclick="closeModal()"
+          >
+            No
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="app-container">
+      <div>
+        <h5 style="color: white">Snap-App</h5>
+      </div>
+      <div id="loader">
+        <img src="/loader2.gif" alt="Loading..." height="200px" width="250px" />
+      </div>
+      <div>
+        <video id="video" width="400" height="400" autoplay></video>
+        <canvas
+          id="canvas"
+          width="400"
+          height="400"
+          style="display: none"
+        ></canvas>
+      </div>
+      <div>
+        <button id="startBtn" class="btn btn-success" onclick="startCapture()">
+          Start Capture
+        </button>
+        <button
+          id="stopBtn"
+          class="btn btn-danger"
+          onclick="confirmDownload()"
+          disabled
+        >
+          Stop Capture
+        </button>
+      </div>
+      <div id="imageContainer"></div>
+      <div id="imageCount" style="color: white">Images Captured: 0</div>
+      <button
+        id="downloadButton"
+        class="btn btn-primary"
+        onclick="downloadImages()"
+      >
+        Download Images
+      </button>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script src="https://unpkg.com/object-detection-visualizer/dist/index.js"></script>
+
+    <script>
+      let video = document.getElementById("video");
+      let canvas = document.getElementById("canvas");
+      let ctx = canvas.getContext("2d");
+      let imageCount = 0;
+      let images = [];
+      let intervalId;
+
+      const detectionResults = [
+        { label: "person", confidence: 0.92, box: [10, 20, 150, 180] },
+        { label: "car", confidence: 0.85, box: [200, 50, 350, 120] },
+        // Add more detection results as needed
+      ];
+
+      // Call the visualize function to create a visualization
+      const visualization =
+        objectDetectionVisualizer.visualize(detectionResults);
+
+      // Log the generated visualization or use it as needed
+      console.log(visualization);
+
+      function openModal() {
+        document.getElementById("myModal").style.display = "block";
+      }
+
+      function closeModal() {
+        document.getElementById("myModal").style.display = "none";
+      }
+
+      // You can also append the visualization to an HTML element
+      const appElement = document.getElementById("app");
+      appElement.innerHTML = visualization;
+
+      function startStream() {
+        closeModal();
+        // Request access to the user's camera
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then((stream) => {
+            video.srcObject = stream;
+          })
+          .catch((error) => {
+            console.error("Error accessing camera:", error);
+          });
+      }
+
+      function startCapture() {
+        imageCount = 0;
+        images = [];
+        updateImageContainer();
+        document.getElementById("imageCount").innerText = `Images Captured: 0`;
+        intervalId = setInterval(() => {
+          // Draw the video frame onto the canvas
+          ctx.drawImage(video, 120, 40, 400, 400, 0, 0, 400, 400);
+
+          // Convert canvas content to a data URL
+          let imageDataUrl = canvas.toDataURL("image/png");
+
+          images.push({
+            name: `image_${imageCount}.png`,
+            dataUrl: imageDataUrl,
+          });
+
+          imageCount++;
+          document.getElementById(
+            "imageCount"
+          ).innerText = `Images Captured: ${imageCount}`;
+          updateImageContainer();
+
+          // Automatically scroll to the last image
+          let imageContainer = document.getElementById("imageContainer");
+          imageContainer.scrollLeft = imageContainer.scrollWidth;
+
+          // Stop capturing after 50 images
+          if (imageCount === 50) {
+            stopCapture();
+            showDownloadButton();
+          }
+        }, 200);
+
+        // Disable start button and enable stop button
+        document.getElementById("startBtn").disabled = true;
+        document.getElementById("stopBtn").disabled = false;
+      }
+
+      function stopCapture() {
+        clearInterval(intervalId);
+
+        // Enable start button and disable stop button
+        document.getElementById("startBtn").disabled = false;
+        document.getElementById("stopBtn").disabled = true;
+      }
+
+      function confirmDownload() {
+        let confirmMessage = "Do you want to download the captured images?";
+        if (window.confirm(confirmMessage)) {
+          zipImages();
+        } else {
+          showDownloadButton();
+        }
+      }
+
+      function zipImages() {
+        let zip = new JSZip();
+
+        images.forEach((image) => {
+          zip.file(image.name, image.dataUrl.split(",")[1], { base64: true });
+        });
+
+        zip.generateAsync({ type: "blob" }).then((blob) => {
+          // Create a link to download the zip file
+          let a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "captured_images.zip";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        });
+      }
+
+      function showDownloadButton() {
+        document.getElementById("downloadButton").style.display =
+          "inline-block";
+      }
+
+      function downloadImages() {
+        zipImages();
+        document.getElementById("downloadButton").style.display = "none";
+      }
+
+      function updateImageContainer() {
+        let imageContainer = document.getElementById("imageContainer");
+        imageContainer.innerHTML = "";
+
+        console.log("images =>", images);
+        images.forEach((image, index) => {
+          let imgElement = document.createElement("div");
+          imgElement.className = "imageWrapper";
+          imgElement.id = "imageWrappers";
+
+          let deleteButtonOverlay = document.createElement("div");
+          deleteButtonOverlay.className = "deleteButtonOverlay";
+
+          let deleteButton = document.createElement("button");
+          deleteButton.innerText = "X";
+          deleteButton.className = "deleteButton";
+          deleteButton.onclick = function () {
+            deleteImage(index);
+          };
+
+          let imageNumberElement = document.createElement("div");
+          imageNumberElement.innerText = `Image ${index + 1}`;
+          imageNumberElement.style.textAlign = "center";
+
+          let img = document.createElement("img");
+          img.src = image.dataUrl;
+
+          imgElement.appendChild(deleteButtonOverlay);
+          imgElement.appendChild(deleteButton);
+          imgElement.appendChild(img);
+          imgElement.appendChild(imageNumberElement);
+
+          imageContainer.appendChild(imgElement);
+        });
+      }
+
+      function deleteImage(index) {
+        images.splice(index, 1);
+        updateImageContainer();
+      }
+    </script>
+  </body>
+</html>
